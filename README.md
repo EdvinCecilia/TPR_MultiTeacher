@@ -1,18 +1,18 @@
 # TPR_MultiTeacher
 
-**TRP** (Task-performance-based Routing for multi-teacher): multi-teacher knowledge distillation for 3D medical image segmentation. The student learns from two teachers via task-performance-based routing—dynamically selecting or blending teachers per region—and is implemented as a lightweight SwinUNETR.
+**TRP** (Task-performance-based Routing for multi-teacher): multi-teacher knowledge distillation for 3D medical image segmentation. The student and teachers share the **same network architecture** (SwinUNETR). The student learns from two frozen teachers via task-performance-based routing—dynamically selecting or blending teachers per region.
 
 ## Method Overview
 
 ![Method Overview](main.png)
 
-TRP routes knowledge from two frozen teachers (e.g. SuPreM and a CLIP-driven model) to a single student:
+TRP routes knowledge from two frozen teachers (e.g. SuPreM and a CLIP-driven model) to a single student (same architecture as teachers):
 
 - **Task-performance routing**: Routing weights are computed from prediction errors (and optional teacher confidence) in logits space, then shared across feature stages.
 - **Region-adaptive fusion**: In harder regions the student leans on the better-performing teacher; in easier regions it fuses both teachers.
 - **Losses**: Supervised segmentation, feature alignment (region-adaptive), logits distillation, and a load-balance term for routing.
 
-The student is warm-started from one teacher and trained with mixed-precision and optional EMA for validation.
+The student is warm-started from one teacher's weights and trained with mixed-precision and optional EMA for validation.
 
 ---
 
@@ -43,7 +43,7 @@ TPR_MultiTeacher/
 ├── utils.py
 ├── model/
 │   ├── __init__.py
-│   ├── student.py           # Lightweight SwinUNETR student
+│   ├── student.py           # Student (same SwinUNETR as teacher)
 │   ├── teachers.py          # Load two frozen teachers (full model + decoder)
 │   └── trp_routing_modules.py   # TRP routing and feature mixing
 └── loss/

@@ -1,23 +1,28 @@
-"""Student model: lightweight SwinUNETR, outputs multi-stage encoder features for distillation."""
+"""Student model: same SwinUNETR architecture as teacher, outputs multi-stage encoder features for distillation."""
 
 import torch
 import torch.nn as nn
 from monai.networks.nets import SwinUNETR
 
 
+# Same SwinUNETR config as teacher (TeacherFullModel): feature_size=48, depths=(2,2,2,2), etc.
+STUDENT_TEACHER_FEATURE_SIZE = 48
+STUDENT_TEACHER_DEPTHS = (2, 2, 2, 2)
+
+
 class StudentModel(nn.Module):
-    """Lightweight SwinUNETR student; outputs encoder features for distillation."""
+    """Student: same network architecture as teacher (SwinUNETR). Outputs encoder features for distillation."""
 
     def __init__(
         self,
         in_channels: int = 1,
         out_channels: int = 14,
-        feature_size: int = 48,
-        depths: tuple = (2, 2, 2, 2),
+        feature_size: int = STUDENT_TEACHER_FEATURE_SIZE,
+        depths: tuple = STUDENT_TEACHER_DEPTHS,
         use_v2: bool = True,
     ):
         super().__init__()
-        
+        # Same architecture as teacher
         self.model = SwinUNETR(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -35,16 +40,15 @@ class StudentModel(nn.Module):
             downsample="merging",
             use_v2=use_v2,
         )
-        
         self.feature_dims = [
-            feature_size,          # stage_0
-            feature_size * 2,      # stage_1
-            feature_size * 4,      # stage_2
-            feature_size * 8,      # stage_3
+            feature_size,
+            feature_size * 2,
+            feature_size * 4,
+            feature_size * 8,
         ]
-        
+        # Student and teacher share the same architecture -> no projection
         self.teacher_dims = [48, 96, 192, 384]
-        self.need_projection = any(s_dim != t_dim for s_dim, t_dim in zip(self.feature_dims, self.teacher_dims))
+        self.need_projection = any(s != t for s, t in zip(self.feature_dims, self.teacher_dims))
         if self.need_projection:
             self.projections = nn.ModuleDict()
             for i, (s_dim, t_dim) in enumerate(zip(self.feature_dims, self.teacher_dims)):

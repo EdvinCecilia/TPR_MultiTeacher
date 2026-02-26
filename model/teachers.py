@@ -1,4 +1,4 @@
-"""Teacher full model: frozen SwinUNETR (encoder + decoder), outputs encoder features and decoder logits."""
+"""Teacher model: same SwinUNETR architecture as student, frozen; outputs encoder features and decoder logits."""
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,7 @@ from monai.networks.nets import SwinUNETR
 
 
 class TeacherFullModel(nn.Module):
-    """Frozen full SwinUNETR; outputs encoder features and decoder logits."""
+    """Teacher: same network as student (SwinUNETR), frozen. Outputs encoder features and decoder logits."""
 
     def __init__(
         self, 
@@ -31,6 +31,7 @@ class TeacherFullModel(nn.Module):
         else:
             print(f"  [{name}] use_v2={use_v2}")
         
+        # Same architecture as student (SwinUNETR: feature_size=48, depths=(2,2,2,2))
         self.model = SwinUNETR(
             in_channels=1,
             out_channels=num_classes,

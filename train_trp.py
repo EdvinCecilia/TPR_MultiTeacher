@@ -481,11 +481,11 @@ def main():
         print("  Teachers loaded.")
 
     if is_main_process:
-        print("Creating student model...")
+        print("Creating student model (same architecture as teacher)...")
     student_model = StudentModel(
         in_channels=1,
         out_channels=args.num_classes,
-        feature_size=args.student_feature_size,
+        feature_size=args.student_feature_size,  # 48: same as teacher
         use_v2=True,
     ).to(device)
     if is_main_process:
