@@ -1,5 +1,5 @@
 """
-TRP training script: task-performance-based routing for multi-teacher knowledge distillation.
+TPR training script: task-performance-based routing for multi-teacher knowledge distillation.
 Uses two full teachers (with decoder) for distillation.
 """
 
@@ -25,8 +25,8 @@ from dataset_pancreas import get_pancreas_dataloaders
 from eval_metrics import compute_dice
 from model.student import StudentModel, load_student_from_checkpoint
 from model.teachers import load_teacher_full_models
-from model.trp_routing_modules import TRPAdaptive as TRP
-from loss.trp_loss import TRPLoss
+from model.tpr_routing import TPR
+from loss.tpr_loss import TPRLoss
 
 
 class EMAModel:
@@ -108,7 +108,7 @@ def train_one_epoch(
     student,
     teacher_1,
     teacher_2,
-    trp,
+    tpr,
     train_loader,
     criterion,
     optimizer,
@@ -120,7 +120,7 @@ def train_one_epoch(
 ):
     """Train one epoch."""
     student.train()
-    trp.train()
+    tpr.train()
     teacher_1.eval()
     teacher_2.eval()
 
@@ -160,8 +160,8 @@ def train_one_epoch(
 
             student_feats_dict = student_model.get_projected_features()
 
-            # TRP: task-performance-based routing and feature mixing
-            mixed_teacher_feats, routing_weights = trp(
+            # TPR: task-performance-based routing and feature mixing
+            mixed_teacher_feats, routing_weights = tpr(
                 student_logits=student_logits,
                 teacher1_logits=teacher1_logits,
                 teacher2_logits=teacher2_logits,
@@ -173,11 +173,13 @@ def train_one_epoch(
             losses = criterion(
                 student_logits=student_logits,
                 student_feats=student_feats_dict,
-                mixed_teacher_feats=mixed_teacher_feats,
+                teacher1_feats=teacher1_feats,
+                teacher2_feats=teacher2_feats,
                 routing_weights=routing_weights,
                 labels=labels,
                 teacher1_logits=teacher1_logits if use_logits_distillation else None,
                 teacher2_logits=teacher2_logits if use_logits_distillation else None,
+                mixed_teacher_feats=mixed_teacher_feats,
             )
 
             loss = losses['total']
@@ -189,9 +191,9 @@ def train_one_epoch(
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         student_params = list(student.module.parameters()) if isinstance(student, DDP) else list(student.parameters())
-        trp_params = list(trp.module.parameters()) if isinstance(trp, DDP) else list(trp.parameters())
+        tpr_params = list(tpr.module.parameters()) if isinstance(tpr, DDP) else list(tpr.parameters())
         grad_norm = torch.nn.utils.clip_grad_norm_(
-            student_params + trp_params,
+            student_params + tpr_params,
             max_norm=0.5
         )
 
@@ -213,9 +215,9 @@ def train_one_epoch(
         if batch_idx % print_freq == 0:
             first_stage = list(routing_weights.keys())[0]
             routing = routing_weights[first_stage]
-            pi_1_spatial = routing.get('pi_1_spatial')
+            weights = routing.get('weights')
             hard_region_mask = routing.get('hard_region_mask')
-            avg_pi_1 = pi_1_spatial.mean().item() if pi_1_spatial is not None else 0.5
+            avg_pi_1 = weights[:, :, 0].mean().item() if weights is not None else 0.5
             hard_ratio = hard_region_mask.float().mean().item() if hard_region_mask is not None else 0.0
             pbar.set_postfix({
                 "loss": f"{loss.item():.4f}",
@@ -330,7 +332,7 @@ def validate(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TRP training (task-performance-based routing for multi-teacher)")
+    parser = argparse.ArgumentParser(description="TPR training (task-performance-based routing for multi-teacher)")
 
     parser.add_argument("--data-dir", type=str, default="/path/to/your/dataset", help="Dataset root directory")
     parser.add_argument("--teacher-1-path", type=str, default="/path/to/teacher1/best_model.pth", help="Teacher 1 checkpoint (e.g. SuPreM)")
@@ -341,9 +343,8 @@ def main():
 
     parser.add_argument("--student-feature-size", type=int, default=48, help="Student feature dim (match teacher)")
     parser.add_argument("--num-classes", type=int, default=3, help="Number of classes (incl. background)")
-    parser.add_argument("--hard-region-threshold", type=float, default=0.5, help="Hard region threshold for TRP routing")
-    parser.add_argument("--routing-temperature", type=float, default=1.0, help="Routing softmax temperature")
-    parser.add_argument("--routing-confidence-scale", type=float, default=0.3, help="Teacher confidence scale in routing")
+    parser.add_argument("--hard-region-threshold", type=float, default=0.5, help="Hard region threshold for TPR routing")
+    parser.add_argument("--routing-temperature", type=float, default=0.7, help="Routing softmax temperature")
 
     parser.add_argument("--epochs", type=int, default=5000, help="Total epochs")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
@@ -358,15 +359,15 @@ def main():
     parser.add_argument("--lambda-seg", type=float, default=1.0, help="Segmentation loss weight")
     parser.add_argument("--lambda-align", type=float, default=0.2, help="Feature alignment loss weight")
     parser.add_argument("--lambda-logits", type=float, default=0.2, help="Logits distillation weight")
-    parser.add_argument("--lambda-balance", type=float, default=0.02, help="Load balance loss weight")
-    parser.add_argument("--balance-temperature", type=float, default=0.5, help="Balance loss temperature")
+    parser.add_argument("--lambda-balance", type=float, default=0.1, help="Load balance loss weight")
+    parser.add_argument("--balance-temperature", type=float, default=0.4, help="Balance loss temperature")
     parser.add_argument("--use-logits-distillation", action="store_true", default=True, help="Use decoder logits distillation")
-    parser.add_argument("--distill-stop-epoch", type=int, default=350, help="Epoch after which to turn off distillation/align/balance")
+    parser.add_argument("--distill-stop-epoch", type=int, default=1200, help="Epoch after which to turn off distillation/align/balance")
     parser.add_argument("--use-ema", action="store_true", default=True, help="Use EMA of student for validation")
     parser.add_argument("--ema-decay", type=float, default=0.999, help="EMA decay")
 
     parser.add_argument("--gpu", type=int, default=0, help="GPU ID (single-GPU)")
-    parser.add_argument("--save-dir", type=str, default="./checkpoints_trp", help="Checkpoint save directory")
+    parser.add_argument("--save-dir", type=str, default="./checkpoints_tpr", help="Checkpoint save directory")
     parser.add_argument("--val-interval", type=int, default=10, help="Validation interval (epochs)")
     parser.add_argument("--max-train-samples", type=int, default=None, help="Max training samples")
     parser.add_argument("--max-val-samples", type=int, default=None, help="Max validation samples")
@@ -500,36 +501,33 @@ def main():
             test_output, _ = student_model(test_input, return_features=True)
             print(f"  Student output shape: {test_output.shape}")
     if is_main_process:
-        print("Creating TRP routing module...")
-    trp_model = TRP(
+        print("Creating TPR routing module...")
+    tpr_model = TPR(
         num_classes=args.num_classes,
-        feature_dims=student_model.teacher_dims,
-        region_size=(8, 8, 8),
         hard_region_threshold=args.hard_region_threshold,
         epsilon=1e-6,
         temperature=args.routing_temperature,
-        confidence_scale=args.routing_confidence_scale,
     ).to(device)
 
     if is_distributed:
         student = DDP(student_model, device_ids=[args.local_rank], find_unused_parameters=False)
-        trp = DDP(trp_model, device_ids=[args.local_rank], find_unused_parameters=False)
+        tpr = DDP(tpr_model, device_ids=[args.local_rank], find_unused_parameters=False)
         student.model_ref = student_model
-        trp.model_ref = trp_model
+        tpr.model_ref = tpr_model
     else:
         student = student_model
-        trp = trp_model
+        tpr = tpr_model
 
     if is_main_process:
         student_stats = student_model if is_distributed else student
-        trp_stats = trp_model if is_distributed else trp
+        tpr_stats = tpr_model if is_distributed else tpr
         student_params = sum(p.numel() for p in student_stats.parameters())
-        trp_params = sum(p.numel() for p in trp_stats.parameters())
+        tpr_params = sum(p.numel() for p in tpr_stats.parameters())
         trainable_params = sum(p.numel() for p in student_stats.parameters() if p.requires_grad)
-        trainable_params += sum(p.numel() for p in trp_stats.parameters() if p.requires_grad)
-        print(f"Student params: {student_params:,}, TRP params: {trp_params:,}, Trainable: {trainable_params:,}")
+        trainable_params += sum(p.numel() for p in tpr_stats.parameters() if p.requires_grad)
+        print(f"Student params: {student_params:,}, TPR params: {tpr_params:,}, Trainable: {trainable_params:,}")
 
-    criterion = TRPLoss(
+    criterion = TPRLoss(
         lambda_seg=args.lambda_seg,
         lambda_align=args.lambda_align,
         lambda_logits=args.lambda_logits,
@@ -542,13 +540,13 @@ def main():
 
     if is_distributed:
         student_params = list(student.module.parameters())
-        trp_params = list(trp.module.parameters())
+        tpr_params = list(tpr.module.parameters())
     else:
         student_params = list(student.parameters())
-        trp_params = list(trp.parameters())
+        tpr_params = list(tpr.parameters())
     
     optimizer = AdamW(
-        student_params + trp_params,
+        student_params + tpr_params,
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
@@ -568,13 +566,12 @@ def main():
             print(f"\nLoading checkpoint: {args.resume}")
         checkpoint = torch.load(args.resume, map_location=device, weights_only=False)
         
-        trp_sd = checkpoint.get('trp_state_dict') or checkpoint.get('tpcr_state_dict')
         if is_distributed:
             student.module.load_state_dict(checkpoint['student_state_dict'])
-            trp.module.load_state_dict(trp_sd)
+            tpr.module.load_state_dict(checkpoint['tpr_state_dict'])
         else:
             student.load_state_dict(checkpoint['student_state_dict'])
-            trp.load_state_dict(trp_sd)
+            tpr.load_state_dict(checkpoint['tpr_state_dict'])
         
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'scaler_state_dict' in checkpoint:
@@ -598,7 +595,7 @@ def main():
         best_dice_from_ckpt = 0.0
 
     if is_main_process:
-        print("\nStarting training (TRP multi-teacher routing)...")
+        print("\nStarting training (TPR multi-teacher routing)...")
         if is_distributed:
             print(f"Distributed: {args.world_size} GPUs")
         if args.resume:
@@ -648,7 +645,7 @@ def main():
             student=student,
             teacher_1=teacher_1,
             teacher_2=teacher_2,
-            trp=trp,
+            tpr=tpr,
             train_loader=train_loader,
             criterion=criterion,
             optimizer=optimizer,
@@ -721,11 +718,11 @@ def main():
                 best_dice = val_metrics["mean_dice"]
                 best_path = save_dir / "best_model.pth"
                 student_state = student.module.state_dict() if is_distributed else student.state_dict()
-                trp_state = trp.module.state_dict() if is_distributed else trp.state_dict()
+                tpr_state = tpr.module.state_dict() if is_distributed else tpr.state_dict()
                 save_dict = {
                     "epoch": epoch,
                     "student_state_dict": student_state,
-                    "trp_state_dict": trp_state,
+                    "tpr_state_dict": tpr_state,
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict(),
                     "best_dice": best_dice,
@@ -746,11 +743,11 @@ def main():
         if is_main_process:
             last_path = save_dir / "last_model.pth"
             student_state = student.module.state_dict() if is_distributed else student.state_dict()
-            trp_state = trp.module.state_dict() if is_distributed else trp.state_dict()
+            tpr_state = tpr.module.state_dict() if is_distributed else tpr.state_dict()
             save_dict = {
                 "epoch": epoch,
                 "student_state_dict": student_state,
-                "trp_state_dict": trp_state,
+                "tpr_state_dict": tpr_state,
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scaler_state_dict": scaler.state_dict(),
                 "train_metrics": train_metrics,

@@ -1,16 +1,17 @@
 # TPR_MultiTeacher
 
-**TRP** (Task-performance-based Routing for multi-teacher): multi-teacher knowledge distillation for 3D medical image segmentation. The student and teachers share the **same network architecture** (SwinUNETR). The student learns from two frozen teachers via task-performance-based routing—dynamically selecting or blending teachers per region.
+**TPR** (Task-Performance-based Routing for multi-teacher): multi-teacher knowledge distillation for 3D medical image segmentation. The student and teachers share the **same network architecture** (SwinUNETR). The student learns from two frozen teachers via task-performance-based routing—dynamically selecting or blending teachers per region.
 
 ## Method Overview
 
 ![Method Overview](main.png)
 
-TRP routes knowledge from two frozen teachers (e.g. SuPreM and a CLIP-driven model) to a single student (same architecture as teachers):
+TPR routes knowledge from two frozen teachers to a single student with the same architecture:
 
-- **Task-performance routing**: Routing weights are computed from prediction errors (and optional teacher confidence) in logits space, then shared across feature stages.
-- **Region-adaptive fusion**: In harder regions the student leans on the better-performing teacher; in easier regions it fuses both teachers.
-- **Losses**: Supervised segmentation, feature alignment (region-adaptive), logits distillation, and a load-balance term for routing.
+- **Task-Performance routing**: Routing weights are computed from region-wise prediction errors against ground truth.
+- **Hard/easy adaptation**: Hard regions use a softmax over teacher relative advantages; easy regions use uniform teacher weights.
+- **Hierarchical routing**: Encoder stages use fixed grids (`8x8x8`, `4x4x4`, `2x2x2`, `1x1x1`) to match boundary-level and semantic-level features.
+- **Losses**: Supervised segmentation, region-weighted feature alignment, region-averaged logits distillation, and an entropy-based load-balance term.
 
 The student is warm-started from one teacher's weights and trained with mixed-precision and optional EMA for validation.
 
@@ -36,8 +37,8 @@ Data and checkpoints:
 TPR_MultiTeacher/
 ├── README.md
 ├── main.png                 # Method figure
-├── train_trp.py             # Training entry
-├── train_trp.sh             # Example training script
+├── train_tpr.py             # Training entry
+├── train_tpr.sh             # Example training script
 ├── dataset_pancreas.py      # Dataset loader (Pancreas or similar)
 ├── eval_metrics.py         # Dice / metrics used during validation
 ├── utils.py
@@ -45,10 +46,10 @@ TPR_MultiTeacher/
 │   ├── __init__.py
 │   ├── student.py           # Student (same SwinUNETR as teacher)
 │   ├── teachers.py          # Load two frozen teachers (full model + decoder)
-│   └── trp_routing_modules.py   # TRP routing and feature mixing
+│   └── tpr_routing.py       # TPR routing and feature mixing
 └── loss/
     ├── __init__.py
-    └── trp_loss.py          # Segmentation, alignment, logits, balance
+    └── tpr_loss.py          # Segmentation, alignment, logits, balance
 ```
 
 ---
@@ -70,7 +71,7 @@ pip install monai
 
 ## Training
 
-1. Set paths in `train_trp.sh` (or pass them on the command line):
+1. Set paths in `train_tpr.sh` (or pass them on the command line):
    - `--data-dir`: root directory of your dataset (containing `dataset.json`).
    - `--teacher-1-path`, `--teacher-2-path`: paths to the two teacher `best_model.pth` (or equivalent).
    - Adjust `--num-classes`, `--roi-size`, `--batch-size`, etc. as needed.
@@ -78,26 +79,26 @@ pip install monai
 2. Run training:
 
 ```bash
-bash train_trp.sh
+bash train_tpr.sh
 ```
 
 Or call the script directly:
 
 ```bash
-python train_trp.py \
+python train_tpr.py \
   --data-dir /path/to/your/dataset \
   --teacher-1-path /path/to/teacher1/best_model.pth \
   --teacher-2-path /path/to/teacher2/best_model.pth \
-  --save-dir ./checkpoints_trp \
+  --save-dir ./checkpoints_tpr \
   --num-classes 3 \
   --epochs 1000 \
   --val-interval 10
 ```
 
-Checkpoints are saved under `--save-dir` with a timestamped subfolder. Best model is saved as `best_model.pth` (includes `student_state_dict`, `trp_state_dict`, optimizer, scaler, and optional EMA). To resume:
+Checkpoints are saved under `--save-dir` with a timestamped subfolder. Best model is saved as `best_model.pth` (includes `student_state_dict`, `tpr_state_dict`, optimizer, scaler, and optional EMA). To resume:
 
 ```bash
-python train_trp.py ... --resume /path/to/checkpoints_trp_YYYYMMDD_HHMMSS/best_model.pth
+python train_tpr.py ... --resume /path/to/checkpoints_tpr_YYYYMMDD_HHMMSS/best_model.pth
 ```
 
 Validation runs during training (see `--val-interval`). Metrics and best Dice are logged in `training_history.json` and in the checkpoint directory.
@@ -114,13 +115,12 @@ Validation runs during training (see `--val-interval`). Metrics and best Dice ar
 | `--roi-size` | 96 96 96 | Training/inference ROI |
 | `--hard-region-threshold` | 0.5 | Threshold for “hard” regions in routing |
 | `--routing-temperature` | 0.7 | Softmax temperature for routing weights |
-| `--routing-confidence-scale` | 0.4 | Scale for teacher confidence in routing |
 | `--lambda-seg` | 1.0 | Segmentation loss weight |
 | `--lambda-align` | 0.2 | Feature alignment weight |
 | `--lambda-logits` | 0.2 | Logits distillation weight |
-| `--lambda-balance` | 0.02 | Load-balance loss weight |
-| `--distill-stop-epoch` | 350 | Epoch after which distillation/align/balance are turned off |
-| `--save-dir` | `./checkpoints_trp` | Checkpoint directory |
+| `--lambda-balance` | 0.1 | Load-balance loss weight |
+| `--distill-stop-epoch` | 1200 | Epoch after which distillation/align/balance are turned off |
+| `--save-dir` | `./checkpoints_tpr` | Checkpoint directory |
 
 ---
 

@@ -1,8 +1,7 @@
-"""Loss package for TRP."""
+"""Loss package for TPR."""
 
-from .trp_loss import TRPLoss
+from .tpr_loss import TPRLoss
 
 __all__ = [
-    "TRPLoss",
+    "TPRLoss",
 ]
-

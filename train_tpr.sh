@@ -1,5 +1,5 @@
 #!/bin/bash
-# TRP (Task-performance-based Routing for multi-teacher) training script
+# TPR (Task-Performance-based Routing for multi-teacher) training script
 # Example: Pancreas dataset with two teacher checkpoints
 
 # Optional: activate conda (uncomment and set path)
@@ -8,7 +8,7 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-python train_trp.py \
+python train_tpr.py \
     --data-dir /path/to/your/dataset \
     --teacher-1-path /path/to/teacher1/best_model.pth \
     --teacher-2-path /path/to/teacher2/best_model.pth \
@@ -19,7 +19,6 @@ python train_trp.py \
     --num-classes 3 \
     --hard-region-threshold 0.5 \
     --routing-temperature 0.7 \
-    --routing-confidence-scale 0.4 \
     --epochs 1000 \
     --lr 3e-4 \
     --weight-decay 1e-5 \
@@ -32,10 +31,10 @@ python train_trp.py \
     --lambda-seg 1.0 \
     --lambda-align 0.2 \
     --lambda-logits 0.2 \
-    --lambda-balance 0.02 \
+    --lambda-balance 0.1 \
     --balance-temperature 0.4 \
     --use-logits-distillation \
     --gpu 0 \
-    --save-dir ./checkpoints_trp \
+    --save-dir ./checkpoints_tpr \
     --val-interval 10 \
     --seed 42
