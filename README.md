@@ -1,4 +1,24 @@
-# TPR_MultiTeacher
+# TPR: Task-Performance Routing for Multi-teacher Distillation
+
+**Accepted at MICCAI 2026!**
+
+Official implementation of **Task-Performance Routing for Multi-teacher Distillation in CT Medical Image Segmentation**.
+
+**Authors:** Jiaye Yang, Yao Liu, Die Dai, Hanwen Zhang, Peiyuan Jiang, Qiao Liu, Yutong Xie, and Peng Wang.
+
+[Paper (PDF)](https://papers.miccai.org/miccai-2026/paper/0973_paper.pdf) · [MICCAI Paper Page](https://papers.miccai.org/miccai-2026/1031-Paper0973.html) · [Citation](#citation)
+
+## News
+
+- Our paper has been accepted at **MICCAI 2026** (International Conference on Medical Image Computing and Computer Assisted Intervention). The full paper is available through the official MICCAI Open Access website.
+
+## Read the Paper
+
+- **Full text:** [Download the open-access PDF](https://papers.miccai.org/miccai-2026/paper/0973_paper.pdf).
+- **Official paper page:** [MICCAI 2026 Open Access](https://papers.miccai.org/miccai-2026/1031-Paper0973.html), including the abstract, bibliographic information, reviews, and author feedback.
+- **Publisher version:** As of October 3, 2026, the official page lists the SpringerLink DOI and SharedIt link as not yet available. Please check the official paper page for updates.
+
+## About TPR
 
 **TPR** (Task-Performance-based Routing for multi-teacher): multi-teacher knowledge distillation for 3D medical image segmentation. The student and teachers share the **same network architecture** (SwinUNETR). The student learns from two frozen teachers via task-performance-based routing—dynamically selecting or blending teachers per region.
 
@@ -56,7 +76,13 @@ TPR_MultiTeacher/
 
 ## Installation
 
-1. Clone the repository (or extract the anonymous code package).
+1. Clone the repository:
+
+```bash
+git clone https://github.com/EdvinCecilia/TPR_MultiTeacher.git
+cd TPR_MultiTeacher
+```
+
 2. Create a virtual/conda environment and install dependencies, for example:
 
 ```bash
@@ -124,6 +150,23 @@ Validation runs during training (see `--val-interval`). Metrics and best Dice ar
 
 ---
 
-## License
+## Citation
 
-This project is released for anonymous review. See the submission package for any license or citation instructions.
+If you use TPR or this repository in your research, please cite our MICCAI 2026 paper:
+
+```bibtex
+@inproceedings{YanJia_TaskPerformance_MICCAI2026,
+  author    = {Yang, Jiaye and Liu, Yao and Dai, Die and Zhang, Hanwen and
+               Jiang, Peiyuan and Liu, Qiao and Xie, Yutong and Wang, Peng},
+  title     = {{Task-Performance Routing for Multi-teacher Distillation in CT Medical Image Segmentation}},
+  booktitle = {Medical Image Computing and Computer Assisted Intervention -- MICCAI 2026},
+  year      = {2026},
+  publisher = {Springer Nature Switzerland},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {16883},
+  month     = sep,
+  url       = {https://papers.miccai.org/miccai-2026/1031-Paper0973.html}
+}
+```
+
+This entry is based on the [official MICCAI BibTeX](https://papers.miccai.org/miccai-2026/1031-Paper0973.html#bibtex-id), with the LNCS series and volume formatted as separate fields. Page numbers and DOI are omitted because they are not yet provided on the official page; please check that page for the final bibliographic details.
